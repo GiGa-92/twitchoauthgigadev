@@ -142,7 +142,7 @@
         async function sendTokenToPlugin(accessToken, state) {
             try {
                 // Invia il token al server locale del plugin
-                const response = await fetch('http://localhost:28475/auth/callback', {
+                const response = await fetch('http://localhost:30000/auth/callback', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
