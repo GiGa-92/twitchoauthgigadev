@@ -139,6 +139,33 @@
             `;
         }
 
+        async function sendTokenToPlugin(accessToken, state) {
+            try {
+                // Invia il token al server locale del plugin
+                const response = await fetch('http://localhost:28475/auth/callback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        access_token: accessToken,
+                        state: state,
+                        timestamp: Date.now()
+                    })
+                });
+
+                if (response.ok) {
+                    return true;
+                } else {
+                    console.error('Failed to send token to plugin');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error sending token to plugin:', error);
+                return false;
+            }
+        }
+
         async function handleAuthCallback() {
             try {
                 // Estrai i parametri dall'URL fragment (dopo il #)
@@ -164,31 +191,61 @@
                     return;
                 }
 
-                // Salva il token in localStorage temporaneamente con state per identificazione
-                const authData = {
-                    accessToken: accessToken,
-                    state: state,
-                    timestamp: Date.now()
-                };
-                localStorage.setItem('twitch_auth_result', JSON.stringify(authData));
+                // Invia il token al plugin
+                const sent = await sendTokenToPlugin(accessToken, state);
 
-                // Mostra successo
-                showStatus('success', '✅', `
-                    <div>
-                        <p style="margin: 0 0 10px 0;"><strong>Authentication successful!</strong></p>
-                        <p style="margin: 0; font-size: 13px; color: #555;">
-                            Returning to Stream Deck...<br>
-                            You can close this window.
-                        </p>
-                    </div>
-                `);
-                
-                document.getElementById('closeBtn').style.display = 'block';
+                if (sent) {
+                    // Mostra successo
+                    showStatus('success', '✅', `
+                        <div>
+                            <p style="margin: 0 0 10px 0;"><strong>Authentication successful!</strong></p>
+                            <p style="margin: 0; font-size: 13px; color: #555;">
+                                Token sent to Stream Deck.<br>
+                                This window will close automatically.
+                            </p>
+                        </div>
+                    `);
+                    
+                    document.getElementById('closeBtn').style.display = 'block';
 
-                // Chiudi automaticamente la finestra dopo 2 secondi
-                setTimeout(() => {
-                    window.close();
-                }, 2000);
+                    // Chiudi automaticamente la finestra dopo 2 secondi
+                    setTimeout(() => {
+                        window.close();
+                    }, 2000);
+                } else {
+                    // Fallback: mostra il token per copia manuale
+                    showStatus('error', '⚠️', `
+                        <div style="text-align: left;">
+                            <p style="margin: 0 0 10px 0;"><strong>Could not connect to Stream Deck</strong></p>
+                            <p style="margin: 0 0 10px 0; font-size: 12px; color: #555;">
+                                Copy the token below and paste it manually:
+                            </p>
+                            <div style="background: #f0f0f0; padding: 12px; border-radius: 6px; margin: 10px 0; word-break: break-all; font-size: 11px; color: #333; border: 2px solid #9146FF; position: relative;">
+                                <code id="tokenText">${accessToken}</code>
+                                <button id="copyBtn" style="position: absolute; top: 8px; right: 8px; padding: 4px 8px; background: #9146FF; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                    `);
+
+                    // Aggiungi listener al pulsante copy
+                    setTimeout(() => {
+                        const copyBtn = document.getElementById('copyBtn');
+                        if (copyBtn) {
+                            copyBtn.addEventListener('click', () => {
+                                navigator.clipboard.writeText(accessToken).then(() => {
+                                    copyBtn.textContent = '✓ Copied!';
+                                    setTimeout(() => {
+                                        copyBtn.textContent = 'Copy';
+                                    }, 2000);
+                                });
+                            });
+                        }
+                    }, 100);
+                    
+                    document.getElementById('closeBtn').style.display = 'block';
+                }
 
             } catch (error) {
                 console.error('Error processing auth callback:', error);
