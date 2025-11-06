@@ -1,1 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Authentication</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            background: #9146FF;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #9146FF;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .close-btn {
+            background: #9146FF;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+
+        .close-btn:hover {
+            background: #7c3aed;
+        }
+
+        .close-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📺</div>
+        <h1>Twitch Authentication</h1>
+        
+        <div id="status" class="status loading">
+            <div class="spinner"></div>
+            <p>Processing authentication...</p>
+        </div>
+
+        <button id="closeBtn" class="close-btn" style="display: none;">Close Window</button>
+    </div>
+
+    <script>
+        function showStatus(type, icon, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = `
+                <div class="icon">${icon}</div>
+                <p>${message}</p>
+            `;
+        }
+
+        function handleAuthCallback() {
+            try {
+                // Estrai i parametri dall'URL fragment (dopo il #)
+                const hash = window.location.hash.substring(1);
+                const params = new URLSearchParams(hash);
+                
+                const accessToken = params.get('access_token');
+                const tokenType = params.get('token_type');
+                const error = params.get('error');
+                const errorDescription = params.get('error_description');
+
+                // Gestisci errori
+                if (error) {
+                    showStatus('error', '❌', `Authentication failed: ${errorDescription || error}`);
+                    document.getElementById('closeBtn').style.display = 'block';
+                    return;
+                }
+
+                // Verifica presenza del token
+                if (!accessToken) {
+                    showStatus('error', '❌', 'No access token received');
+                    document.getElementById('closeBtn').style.display = 'block';
+                    return;
+                }
+
+                // Successo! Invia il token alla finestra parent (Property Inspector)
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'TWITCH_AUTH_SUCCESS',
+                        accessToken: accessToken,
+                        tokenType: tokenType
+                    }, '*');
+                    
+                    showStatus('success', '✅', 'Authentication successful! You can close this window.');
+                    
+                    // Chiudi automaticamente dopo 2 secondi
+                    setTimeout(() => {
+                        window.close();
+                    }, 2000);
+                } else {
+                    showStatus('error', '❌', 'Unable to communicate with parent window');
+                }
+
+                document.getElementById('closeBtn').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error processing auth callback:', error);
+                showStatus('error', '❌', `Error: ${error.message}`);
+                document.getElementById('closeBtn').style.display = 'block';
+            }
+        }
+
+        // Gestisci il click sul pulsante di chiusura
+        document.getElementById('closeBtn').addEventListener('click', function() {
+            window.close();
+        });
+
+        // Avvia il processo quando la pagina è caricata
+        if (window.location.hash) {
+            handleAuthCallback();
+        } else {
+            showStatus('error', '❌', 'No authentication data received');
+            document.getElementById('closeBtn').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
