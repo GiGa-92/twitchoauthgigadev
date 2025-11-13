@@ -139,17 +139,22 @@
             `;
         }
 
-        async function sendTokenToPlugin(accessToken, state) {
+        async function sendTokenToPlugin(accessToken, stateWithPort) {
             try {
+                // Estrai la porta dallo state
+                const stateParts = stateWithPort.split('_');
+                const port = stateParts[0];
+                const randomState = stateParts.slice(1).join('_'); // Reconstruct the random part of the state
+
                 // Invia il token al server locale del plugin
-                const response = await fetch('http://localhost:3000/auth/callback', {
+                const response = await fetch(`http://localhost:${port}/auth/callback`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         access_token: accessToken,
-                        state: state,
+                        state: randomState, // Send only the random part of the state to the plugin
                         timestamp: Date.now()
                     })
                 });
