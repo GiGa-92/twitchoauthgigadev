@@ -139,36 +139,43 @@
             `;
         }
 
-        async function sendTokenToPlugin(accessToken, stateWithPort) {
-            try {
-                // Estrai la porta dallo state
-                const stateParts = stateWithPort.split('_');
-                const port = stateParts[0];
-                const randomState = stateParts.slice(1).join('_'); // Reconstruct the random part of the state
-
-                // Invia il token al server locale del plugin
-                const response = await fetch(`http://localhost:${port}/auth/callback`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        access_token: accessToken,
-                        state: randomState, // Send only the random part of the state to the plugin
-                        timestamp: Date.now()
-                    })
-                });
-
-                if (response.ok) {
-                    return true;
-                } else {
-                    console.error('Failed to send token to plugin');
-                    return false;
-                }
-            } catch (error) {
-                console.error('Error sending token to plugin:', error);
-                return false;
+        async function sendTokenToPlugin(accessToken, port, randomState) {
+            // Prova più porte nel caso in cui quella passata non funzioni
+            const portsToTry = [port];
+            
+            // Aggiungi porte di fallback (3000-3009)
+            for (let i = 3000; i <= 3009; i++) {
+                if (i !== port) portsToTry.push(i);
             }
+
+            for (const tryPort of portsToTry) {
+                try {
+                    console.log(`Trying port ${tryPort}...`);
+                    const response = await fetch(`http://127.0.0.1:${tryPort}/auth/callback`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            access_token: accessToken,
+                            state: randomState,
+                            timestamp: Date.now()
+                        })
+                    });
+
+                    if (response.ok) {
+                        console.log(`Successfully connected on port ${tryPort}`);
+                        return true;
+                    } else {
+                        console.log(`Port ${tryPort} responded with status ${response.status}`);
+                    }
+                } catch (error) {
+                    console.log(`Port ${tryPort} failed:`, error.message);
+                    // Continua con la prossima porta
+                }
+            }
+            
+            return false;
         }
 
         async function handleAuthCallback() {
@@ -178,7 +185,7 @@
                 const params = new URLSearchParams(hash);
                 
                 const accessToken = params.get('access_token');
-                const state = params.get('state');
+                const stateWithPort = params.get('state');
                 const error = params.get('error');
                 const errorDescription = params.get('error_description');
 
@@ -196,8 +203,28 @@
                     return;
                 }
 
+                // Estrai porta e state dallo stateWithPort
+                if (!stateWithPort) {
+                    showStatus('error', '❌', 'No state parameter received');
+                    document.getElementById('closeBtn').style.display = 'block';
+                    return;
+                }
+
+                // Il formato è: "PORT_RANDOM_STATE"
+                const parts = stateWithPort.split('_');
+                if (parts.length < 2) {
+                    showStatus('error', '❌', 'Invalid state format');
+                    document.getElementById('closeBtn').style.display = 'block';
+                    return;
+                }
+
+                const port = parseInt(parts[0], 10);
+                const randomState = parts.slice(1).join('_'); // Il resto è lo state random
+
+                console.log(`Extracted port: ${port}, state: ${randomState}`);
+
                 // Invia il token al plugin
-                const sent = await sendTokenToPlugin(accessToken, state);
+                const sent = await sendTokenToPlugin(accessToken, port, randomState);
 
                 if (sent) {
                     // Mostra successo
@@ -223,7 +250,11 @@
                         <div style="text-align: left;">
                             <p style="margin: 0 0 10px 0;"><strong>Could not connect to Stream Deck</strong></p>
                             <p style="margin: 0 0 10px 0; font-size: 12px; color: #555;">
-                                Copy the token below and paste it manually:
+                                Make sure Stream Deck is running and the plugin is loaded.<br>
+                                Tried ports: ${port}, 3000-3009
+                            </p>
+                            <p style="margin: 0 0 10px 0; font-size: 12px; color: #555;">
+                                Copy the token below and contact support:
                             </p>
                             <div style="background: #f0f0f0; padding: 12px; border-radius: 6px; margin: 10px 0; word-break: break-all; font-size: 11px; color: #333; border: 2px solid #9146FF; position: relative;">
                                 <code id="tokenText">${accessToken}</code>
